@@ -48,7 +48,7 @@ const Navbar = () => {
           {user && (
             <>
               <button
-                onClick={becomeEducator}
+                onClick={()=> {navigate('/educator')}}
                 className="cursor-pointer text-blue-600 hover:underline"
               >
                 {isEducator ? 'Educator Dashboard' : 'Become Educator'}
@@ -73,7 +73,7 @@ const Navbar = () => {
           {user && (
             <>
               <button
-                onClick={becomeEducator}
+                onClick={()=> {navigate('/educator')}}
                 className="cursor-pointer text-blue-600 hover:underline active:scale-95 transition"
               >
                 {isEducator ? 'Educator Dashboard' : 'Become Educator'}
