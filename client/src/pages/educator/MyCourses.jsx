@@ -68,4 +68,4 @@ const MyCourses = () => {
   ) : <Loading />
 };
 
-export default MyCourses
+export default MyCourses;
