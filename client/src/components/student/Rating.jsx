@@ -33,4 +33,4 @@ const Rating = ({ initialRating, onRate }) => {
     );
 };
 
-export default Rating
+export default Rating;

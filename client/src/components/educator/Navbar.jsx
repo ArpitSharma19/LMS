@@ -22,4 +22,4 @@ const Navbar = ({ bgColor }) => {
   );
 };
 
-export default Navbar
+export default Navbar;

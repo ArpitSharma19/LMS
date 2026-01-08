@@ -70,4 +70,4 @@ const StudentsEnrolled = () => {
   ) : <Loading />
 };
 
-export default StudentsEnrolled
+export default StudentsEnrolled;
