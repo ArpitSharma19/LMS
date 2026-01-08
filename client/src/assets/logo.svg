@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="100" viewBox="0 0 320 100" role="img" aria-label="BrainLyft logo">
+  <title>BrainLyft</title>
+  <!-- Circle -->
+  <circle cx="50" cy="50" r="40" fill="#0B74DE"></circle>
+  <!-- Cap -->
+  <polygon points="50,30 70,42 50,54 30,42" fill="#fff"></polygon>
+  <rect x="45" y="54" width="10" height="6" fill="#111827"></rect>
+  <!-- Text to the right -->
+  <text x="110" y="58" font-family="Poppins, Arial, sans-serif" font-size="32" font-weight="700" fill="#111827">BrainLyft</text>
+</svg>
