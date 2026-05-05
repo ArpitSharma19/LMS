@@ -15,8 +15,7 @@ import adminRouter from "./routes/adminRoutes.js";
 import authRouter from "./routes/authRoutes.js";
 import certificateRouter from "./routes/certificateRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
-
-import { supabase } from "./config/supabase.js";
+import healthRouter from "./routes/healthRoutes.js";
 
 const app = express();
 
@@ -63,15 +62,7 @@ app.get("/", (req, res) => {
 
 app.get("/favicon.ico", (req, res) => res.status(204).end());
 
-app.get("/test-supabase", async (req, res) => {
-  try {
-    const { data, error } = await supabase.from("users").select("id, name").limit(1);
-    if (error) throw error;
-    res.json({ success: true, data });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
+app.use("/health", healthRouter);
 
 app.use("/api/user", userRouter);
 app.use("/api/educator", educatorRouter);

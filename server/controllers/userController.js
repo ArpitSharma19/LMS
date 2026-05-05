@@ -1,5 +1,4 @@
-import cloudinary from '../config/cloudinary.js';
-import fs from 'fs';
+import { uploadBuffer } from '../utils/uploadToCloudinary.js';
 import { supabase } from '../config/supabase.js';
 import ApiError from "../utils/ApiError.js"
 import catchAsync from "../utils/catchAsync.js"
@@ -301,20 +300,17 @@ export const markLectureComplete = catchAsync(async (req, res) => {
 
 export const updateProfileImage = catchAsync(async (req, res) => {
     if (!req.file) throw new ApiError(400, 'Please upload an image');
-    
-    try {
 
-        const result = await cloudinary.uploader.upload(req.file.path, { folder: 'lms_profiles', width: 500, crop: "scale" });
-        
-        await supabase
-            .from('users')
-            .update({ image_url: result.secure_url })
-            .eq('id', req.auth.userId);
+    const result = await uploadBuffer(req.file.buffer, {
+        folder: 'lms_profiles',
+        width: 500,
+        crop: 'scale',
+    });
 
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        res.json({ success: true, message: 'Image updated', imageUrl: result.secure_url });
-    } catch (error) {
-        if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-        throw new ApiError(500, 'Upload failed');
-    }
+    await supabase
+        .from('users')
+        .update({ image_url: result.secure_url })
+        .eq('id', req.auth.userId);
+
+    res.json({ success: true, message: 'Image updated', imageUrl: result.secure_url });
 });

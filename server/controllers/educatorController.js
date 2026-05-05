@@ -1,5 +1,4 @@
-import cloudinary from '../config/cloudinary.js';
-import fs from 'fs';
+import { uploadBuffer } from '../utils/uploadToCloudinary.js';
 import { supabase } from '../config/supabase.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
@@ -43,76 +42,64 @@ export const addCourse = catchAsync(async (req, res) => {
 
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
-
-        const result = await cloudinary.uploader.upload(thumb.path);
+        const result = await uploadBuffer(thumb.buffer);
         parsed.course_thumbnail = result.secure_url;
-        if (fs.existsSync(thumb.path)) fs.unlinkSync(thumb.path);
     }
 
-    try {
-        const { courseContent, ...fields } = parsed;
-        // Fix field names for snake_case
-        const courseFields = {
-            course_title: fields.courseTitle,
-            course_description: fields.courseDescription,
-            course_price: fields.coursePrice,
-            discount: fields.discount,
-            course_thumbnail: fields.course_thumbnail || fields.courseThumbnail,
-            is_published: fields.isPublished,
-            category: fields.category,
-            educator: userId,
-            level: fields.level,
-            language: fields.language
-        };
+    const { courseContent, ...fields } = parsed;
+    const courseFields = {
+        course_title: fields.courseTitle,
+        course_description: fields.courseDescription,
+        course_price: fields.coursePrice,
+        discount: fields.discount,
+        course_thumbnail: fields.course_thumbnail || fields.courseThumbnail,
+        is_published: fields.isPublished,
+        category: fields.category,
+        educator: userId,
+        level: fields.level,
+        language: fields.language,
+    };
 
-        const { data: newCourse, error: courseError } = await supabase
-            .from('courses')
-            .insert([courseFields])
+    const { data: newCourse, error: courseError } = await supabase
+        .from('courses')
+        .insert([courseFields])
+        .select()
+        .single();
+
+    if (courseError) throw courseError;
+
+    for (const [cIdx, ch] of (courseContent || []).entries()) {
+        const { data: chapter, error: chapterError } = await supabase
+            .from('chapters')
+            .insert([{
+                course_id: newCourse.id,
+                chapter_title: ch.chapterTitle,
+                chapter_order: ch.chapterOrder || cIdx,
+            }])
             .select()
             .single();
 
-        if (courseError) throw courseError;
+        if (chapterError) throw chapterError;
 
-        for (const [cIdx, ch] of (courseContent || []).entries()) {
-            const { data: chapter, error: chapterError } = await supabase
-                .from('chapters')
-                .insert([{ 
-                    course_id: newCourse.id, 
-                    chapter_title: ch.chapterTitle,
-                    chapter_order: ch.chapterOrder || cIdx
-                }])
-                .select()
-                .single();
-            
-            if (chapterError) throw chapterError;
-
-            for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
-                const lecFile = files.find(f => f.fieldname === `lectureFile_${cIdx}_${lIdx}`);
-                let url = lec.lectureUrl;
-                if (lecFile) {
-
-                    const result = await cloudinary.uploader.upload(lecFile.path, { resource_type: 'auto' });
-                    url = result.secure_url;
-                    if (fs.existsSync(lecFile.path)) fs.unlinkSync(lecFile.path);
-                }
-                
-                await supabase
-                    .from('lectures')
-                    .insert([{ 
-                        chapter_id: chapter.id, 
-                        lecture_title: lec.lectureTitle,
-                        lecture_duration: lec.lectureDuration,
-                        lecture_url: url,
-                        is_preview: lec.isPreview,
-                        lecture_order: lec.lectureOrder || lIdx
-                    }]);
+        for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
+            const lecFile = files.find(f => f.fieldname === `lectureFile_${cIdx}_${lIdx}`);
+            let url = lec.lectureUrl;
+            if (lecFile) {
+                const result = await uploadBuffer(lecFile.buffer, { resource_type: 'auto' });
+                url = result.secure_url;
             }
+
+            await supabase.from('lectures').insert([{
+                chapter_id: chapter.id,
+                lecture_title: lec.lectureTitle,
+                lecture_duration: lec.lectureDuration,
+                lecture_url: url,
+                is_preview: lec.isPreview,
+                lecture_order: lec.lectureOrder || lIdx,
+            }]);
         }
-        res.status(201).json({ success: true, data: newCourse });
-    } catch (error) {
-        files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
-        throw error;
     }
+    res.status(201).json({ success: true, data: newCourse });
 });
 
 export const updateCourse = catchAsync(async (req, res) => {
@@ -131,66 +118,57 @@ export const updateCourse = catchAsync(async (req, res) => {
     
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
-
-        const result = await cloudinary.uploader.upload(thumb.path);
+        const result = await uploadBuffer(thumb.buffer);
         parsed.course_thumbnail = result.secure_url;
-        if (fs.existsSync(thumb.path)) fs.unlinkSync(thumb.path);
     }
 
-    try {
-        const { courseContent, ...fields } = parsed;
-        const updateFields = {};
-        if (fields.courseTitle) updateFields.course_title = fields.courseTitle;
-        if (fields.courseDescription) updateFields.course_description = fields.courseDescription;
-        if (fields.coursePrice !== undefined) updateFields.course_price = fields.coursePrice;
-        if (fields.discount !== undefined) updateFields.discount = fields.discount;
-        if (parsed.course_thumbnail) updateFields.course_thumbnail = parsed.course_thumbnail;
-        if (fields.isPublished !== undefined) updateFields.is_published = fields.isPublished;
-        if (fields.category) updateFields.category = fields.category;
-        if (fields.level) updateFields.level = fields.level;
-        if (fields.language) updateFields.language = fields.language;
+    const { courseContent, ...fields } = parsed;
+    const updateFields = {};
+    if (fields.courseTitle) updateFields.course_title = fields.courseTitle;
+    if (fields.courseDescription) updateFields.course_description = fields.courseDescription;
+    if (fields.coursePrice !== undefined) updateFields.course_price = fields.coursePrice;
+    if (fields.discount !== undefined) updateFields.discount = fields.discount;
+    if (parsed.course_thumbnail) updateFields.course_thumbnail = parsed.course_thumbnail;
+    if (fields.isPublished !== undefined) updateFields.is_published = fields.isPublished;
+    if (fields.category) updateFields.category = fields.category;
+    if (fields.level) updateFields.level = fields.level;
+    if (fields.language) updateFields.language = fields.language;
 
-        await supabase.from('courses').update(updateFields).eq('id', course.id);
+    await supabase.from('courses').update(updateFields).eq('id', course.id);
 
-        if (courseContent) {
-            // Delete old content
-            const { data: chapters } = await supabase.from('chapters').select('id').eq('course_id', course.id);
-            if (chapters && chapters.length) {
-                const chapterIds = chapters.map(c => c.id);
-                await supabase.from('lectures').delete().in('chapter_id', chapterIds);
-                await supabase.from('chapters').delete().eq('course_id', course.id);
-            }
-
-            for (const [cIdx, ch] of courseContent.entries()) {
-                const { data: chapter } = await supabase
-                    .from('chapters')
-                    .insert([{ 
-                        course_id: course.id, 
-                        chapter_title: ch.chapterTitle,
-                        chapter_order: ch.chapterOrder || cIdx
-                    }])
-                    .select()
-                    .single();
-                
-                for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
-                    await supabase
-                        .from('lectures')
-                        .insert([{ 
-                            chapter_id: chapter.id, 
-                            lecture_title: lec.lectureTitle,
-                            lecture_duration: lec.lectureDuration,
-                            lecture_url: lec.lectureUrl,
-                            is_preview: lec.isPreview,
-                            lecture_order: lec.lectureOrder || lIdx
-                        }]);
-                }
-            }
+    if (courseContent) {
+        const { data: chapters } = await supabase.from('chapters').select('id').eq('course_id', course.id);
+        if (chapters && chapters.length) {
+            const chapterIds = chapters.map(c => c.id);
+            await supabase.from('lectures').delete().in('chapter_id', chapterIds);
+            await supabase.from('chapters').delete().eq('course_id', course.id);
         }
 
-        res.json({ success: true, data: { ...course, ...updateFields } });
-    } catch (error) {
-        throw error;
+        for (const [cIdx, ch] of courseContent.entries()) {
+            const { data: chapter } = await supabase
+                .from('chapters')
+                .insert([{
+                    course_id: course.id,
+                    chapter_title: ch.chapterTitle,
+                    chapter_order: ch.chapterOrder || cIdx,
+                }])
+                .select()
+                .single();
+
+            for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
+                await supabase.from('lectures').insert([{
+                    chapter_id: chapter.id,
+                    lecture_title: lec.lectureTitle,
+                    lecture_duration: lec.lectureDuration,
+                    lecture_url: lec.lectureUrl,
+                    is_preview: lec.isPreview,
+                    lecture_order: lec.lectureOrder || lIdx,
+                }]);
+            }
+        }
     }
+
+    res.json({ success: true, data: { ...course, ...updateFields } });
 });
 
 export const deleteCourse = catchAsync(async (req, res) => {
