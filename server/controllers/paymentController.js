@@ -1,4 +1,4 @@
-import { getStripe } from '../config/stripe.js';
+import { getStripe } from '../utils/loaders.js';
 import { supabase } from '../config/supabase.js';
 import catchAsync from '../utils/catchAsync.js';
 import ApiError from '../utils/ApiError.js';

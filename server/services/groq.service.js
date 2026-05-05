@@ -1,13 +1,12 @@
-import Groq from "groq-sdk";
-
 let groqInstance = null;
 
-const getGroq = () => {
+const getGroq = async () => {
   if (!groqInstance) {
     if (!process.env.GROQ_API_KEY) {
       console.error("❌ GROQ_API_KEY is missing in .env");
       return null;
     }
+    const Groq = (await import("groq-sdk")).default;
     groqInstance = new Groq({
       apiKey: process.env.GROQ_API_KEY.trim(),
     });
@@ -29,7 +28,7 @@ If you don't know something specific about this platform's courses, offer genera
 
 export const getChatCompletion = async (messages) => {
   try {
-    const groq = getGroq();
+    const groq = await getGroq();
     if (!groq) {
       return "I'm sorry, my AI brain is currently offline (API key missing). Please try again later.";
     }

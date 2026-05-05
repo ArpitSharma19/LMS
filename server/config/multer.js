@@ -1,17 +1,26 @@
-import multer from "multer";
+import { getMulter } from '../utils/loaders.js';
 
-const storage = multer.diskStorage({})
-
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/') || file.mimetype === 'video/mp4' || file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new Error('Unsupported file type'), false);
+const upload = {
+    single: (fieldName) => {
+        return async (req, res, next) => {
+            try {
+                const multerInstance = await getMulter();
+                return multerInstance.single(fieldName)(req, res, next);
+            } catch (error) {
+                next(error);
+            }
+        };
+    },
+    fields: (fieldsArray) => {
+        return async (req, res, next) => {
+            try {
+                const multerInstance = await getMulter();
+                return multerInstance.fields(fieldsArray)(req, res, next);
+            } catch (error) {
+                next(error);
+            }
+        };
     }
-  }
-});
+};
 
-export default upload
+export default upload;

@@ -1,4 +1,4 @@
-import { getCloudinary } from '../config/cloudinary.js';
+import { getCloudinary } from '../utils/loaders.js';
 import fs from 'fs';
 import { supabase } from '../config/supabase.js';
 import ApiError from "../utils/ApiError.js"
