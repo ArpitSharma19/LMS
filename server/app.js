@@ -94,4 +94,7 @@ app.use("*", (req, res) => {
 
 app.use(errorMiddleware);
 
-export default app;
+// Export for Vercel Serverless
+export default (req, res) => {
+  return app(req, res);
+};
