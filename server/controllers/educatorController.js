@@ -1,5 +1,5 @@
-import { v2 as cloudinary } from 'cloudinary'
-import fs from 'fs'
+import { getCloudinary } from '../config/cloudinary.js';
+import fs from 'fs';
 import { supabase } from '../config/supabase.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
@@ -43,6 +43,7 @@ export const addCourse = catchAsync(async (req, res) => {
 
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
+        const cloudinary = await getCloudinary();
         const result = await cloudinary.uploader.upload(thumb.path);
         parsed.course_thumbnail = result.secure_url;
         if (fs.existsSync(thumb.path)) fs.unlinkSync(thumb.path);
@@ -89,6 +90,7 @@ export const addCourse = catchAsync(async (req, res) => {
                 const lecFile = files.find(f => f.fieldname === `lectureFile_${cIdx}_${lIdx}`);
                 let url = lec.lectureUrl;
                 if (lecFile) {
+                    const cloudinary = await getCloudinary();
                     const result = await cloudinary.uploader.upload(lecFile.path, { resource_type: 'auto' });
                     url = result.secure_url;
                     if (fs.existsSync(lecFile.path)) fs.unlinkSync(lecFile.path);
@@ -129,6 +131,7 @@ export const updateCourse = catchAsync(async (req, res) => {
     
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
+        const cloudinary = await getCloudinary();
         const result = await cloudinary.uploader.upload(thumb.path);
         parsed.course_thumbnail = result.secure_url;
         if (fs.existsSync(thumb.path)) fs.unlinkSync(thumb.path);
