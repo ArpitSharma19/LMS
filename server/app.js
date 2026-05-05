@@ -17,8 +17,16 @@ import certificateRouter from "./routes/certificateRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
 
 import { supabase } from "./config/supabase.js";
+import connectCloudinary from "./config/cloudinary.js";
 
 const app = express();
+
+// Initialize Cloudinary safely (sync-like or fire-and-forget for serverless)
+try {
+  connectCloudinary();
+} catch (err) {
+  console.warn("⚠️ Cloudinary init error:", err.message);
+}
 
 app.use(helmet({
   contentSecurityPolicy: {

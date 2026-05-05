@@ -14,7 +14,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "bcryptjs": "^3.0.3",
-    "cloudinary": "^2.5.0",
+    "cloudinary": "latest",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "cookie": "^1.0.2",
