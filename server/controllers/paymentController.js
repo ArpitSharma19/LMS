@@ -22,6 +22,7 @@ export const createCheckoutSession = catchAsync(async (req, res) => {
     }
 
     // 2. If Paid Course -> Create Stripe Session
+    if (!stripe) throw new ApiError(503, 'Payment service unavailable');
 
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
@@ -62,6 +63,8 @@ export const stripeWebhook = catchAsync(async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
 
+
+    if (!stripe) return res.status(503).json({ message: 'Payment service unavailable' });
 
     try {
         event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);

@@ -1,13 +1,20 @@
-import Stripe from 'stripe';
+let Stripe;
 
-const stripeKey = process.env.STRIPE_SECRET_KEY || '';
-
-if (!stripeKey) {
-    console.warn('⚠️ STRIPE_SECRET_KEY is missing. Stripe functionality will fail.');
+try {
+  const stripeModule = await import('stripe');
+  Stripe = stripeModule.default;
+} catch (err) {
+  console.error('Stripe failed to load:', err.message);
 }
 
-const stripe = new Stripe(stripeKey || 'sk_test_placeholder', {
-    apiVersion: '2024-06-20',
-});
+const stripe = Stripe
+  ? new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+      apiVersion: '2024-06-20',
+    })
+  : null;
+
+if (!process.env.STRIPE_SECRET_KEY) {
+  console.warn('⚠️ STRIPE_SECRET_KEY is missing. Stripe functionality will be disabled.');
+}
 
 export default stripe;
