@@ -1,17 +1,9 @@
 import './config/env.js';
 import app from './app.js';
-import { getCloudinary } from "./config/cloudinary.js";
 
 const startServer = async () => {
   try {
     console.log("🚀 Starting LMS Server Locally...");
-
-    try {
-      await getCloudinary();
-      console.log("✅ Cloudinary Lazy Configured");
-    } catch (err) {
-      console.log("❌ Cloudinary Error:", err.message);
-    }
 
     const PORT = process.env.PORT || 5000;
 

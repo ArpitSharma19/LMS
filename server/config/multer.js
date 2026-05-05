@@ -1,46 +1,17 @@
-import { getMulter } from '../utils/loaders.js';
+import multer from "multer";
 
-const upload = {
-    single: (fieldName) => {
-        return async (req, res, next) => {
-            try {
-                const multerInstance = await getMulter();
-                return multerInstance.single(fieldName)(req, res, next);
-            } catch (error) {
-                next(error);
-            }
-        };
-    },
-    fields: (fieldsArray) => {
-        return async (req, res, next) => {
-            try {
-                const multerInstance = await getMulter();
-                return multerInstance.fields(fieldsArray)(req, res, next);
-            } catch (error) {
-                next(error);
-            }
-        };
-    },
-    any: () => {
-        return async (req, res, next) => {
-            try {
-                const multerInstance = await getMulter();
-                return multerInstance.any()(req, res, next);
-            } catch (error) {
-                next(error);
-            }
-        };
-    },
-    array: (fieldName, maxCount) => {
-        return async (req, res, next) => {
-            try {
-                const multerInstance = await getMulter();
-                return multerInstance.array(fieldName, maxCount)(req, res, next);
-            } catch (error) {
-                next(error);
-            }
-        };
+const storage = multer.memoryStorage();
+
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype === 'video/mp4' || file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type'), false);
     }
-};
+  }
+});
 
 export default upload;

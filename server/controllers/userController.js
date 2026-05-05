@@ -1,4 +1,4 @@
-import { getCloudinary } from '../utils/loaders.js';
+import cloudinary from '../config/cloudinary.js';
 import fs from 'fs';
 import { supabase } from '../config/supabase.js';
 import ApiError from "../utils/ApiError.js"
@@ -303,7 +303,7 @@ export const updateProfileImage = catchAsync(async (req, res) => {
     if (!req.file) throw new ApiError(400, 'Please upload an image');
     
     try {
-        const cloudinary = await getCloudinary();
+
         const result = await cloudinary.uploader.upload(req.file.path, { folder: 'lms_profiles', width: 500, crop: "scale" });
         
         await supabase

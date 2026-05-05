@@ -1,4 +1,4 @@
-import { getStripe } from '../utils/loaders.js';
+import stripe from '../config/stripe.js';
 import { supabase } from '../config/supabase.js';
 import catchAsync from '../utils/catchAsync.js';
 import ApiError from '../utils/ApiError.js';
@@ -22,7 +22,7 @@ export const createCheckoutSession = catchAsync(async (req, res) => {
     }
 
     // 2. If Paid Course -> Create Stripe Session
-    const stripe = await getStripe();
+
     const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         line_items: [{
@@ -61,7 +61,7 @@ export const createCheckoutSession = catchAsync(async (req, res) => {
 export const stripeWebhook = catchAsync(async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
-    const stripe = await getStripe();
+
 
     try {
         event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
