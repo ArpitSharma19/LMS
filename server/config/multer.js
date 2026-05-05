@@ -20,6 +20,26 @@ const upload = {
                 next(error);
             }
         };
+    },
+    any: () => {
+        return async (req, res, next) => {
+            try {
+                const multerInstance = await getMulter();
+                return multerInstance.any()(req, res, next);
+            } catch (error) {
+                next(error);
+            }
+        };
+    },
+    array: (fieldName, maxCount) => {
+        return async (req, res, next) => {
+            try {
+                const multerInstance = await getMulter();
+                return multerInstance.array(fieldName, maxCount)(req, res, next);
+            } catch (error) {
+                next(error);
+            }
+        };
     }
 };
 
