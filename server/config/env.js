@@ -26,9 +26,6 @@ requiredEnv.forEach(envVar => {
 
 if (!process.env.JWT_SECRET || !process.env.SUPABASE_URL) {
     console.error("❌ CRITICAL: Mandatory environment variables are missing (JWT_SECRET or SUPABASE_URL).");
-    if (process.env.NODE_ENV === 'production') {
-      console.error("Continuing anyway to allow serverless startup...");
-    } else {
-      process.exit(1);
-    }
+    // Never exit in production/serverless as it causes 500 errors on cold starts
+    console.warn("Continuing anyway to allow serverless startup...");
 }
