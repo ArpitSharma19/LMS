@@ -62,9 +62,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.get("/", (req, res) => {
   res.json({
     success: true,
-    message: "🚀 LMS API is running (Supabase + Stripe)",
-    version: "1.0.0",
-    environment: process.env.NODE_ENV || "development"
+    message: "API is running"
   });
 });
 
@@ -76,7 +74,7 @@ app.get("/test-supabase", async (req, res) => {
     if (error) throw error;
     res.json({ success: true, data });
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message, stack: process.env.NODE_ENV === 'development' ? err.stack : undefined });
   }
 });
 
