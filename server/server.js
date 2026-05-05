@@ -60,12 +60,24 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get("/", (req, res) => {
-  res.send("🚀 LMS API Running with Supabase");
+  res.json({
+    success: true,
+    message: "🚀 LMS API is running (Supabase + Stripe)",
+    version: "1.0.0",
+    environment: process.env.NODE_ENV || "development"
+  });
 });
 
+app.get("/favicon.ico", (req, res) => res.status(204).end());
+
 app.get("/test-supabase", async (req, res) => {
-  const { data, error } = await supabase.from("users").select("id, name").limit(1);
-  res.json({ success: !error, data, error });
+  try {
+    const { data, error } = await supabase.from("users").select("id, name").limit(1);
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.use("/api/user", userRouter);

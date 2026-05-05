@@ -1,11 +1,7 @@
-import Stripe from 'stripe';
+import stripe from '../config/stripe.js';
 import { supabase } from '../config/supabase.js';
 import catchAsync from '../utils/catchAsync.js';
 import ApiError from '../utils/ApiError.js';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-    apiVersion: '2024-06-20',
-});
 
 export const createCheckoutSession = catchAsync(async (req, res) => {
     const { courseId } = req.body;
