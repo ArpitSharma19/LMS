@@ -78,7 +78,8 @@ export const login = catchAsync(async (req, res) => {
     .eq('email', String(email))
     .single();
 
-  if (!user || !(await bcrypt.compare(password, user.password || ''))) {
+  // user.password can be null for manually-inserted rows — guard before bcrypt
+  if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
     throw new ApiError(401, 'Invalid credentials');
   }
 
@@ -190,17 +191,22 @@ export const resetPassword = catchAsync(async (req, res) => {
 });
 
 export const changePassword = catchAsync(async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword) {
+    throw new ApiError(400, 'Current and new password are required');
+  }
+
   const { data: user } = await supabase
     .from('users')
     .select('id, password')
     .eq('id', req.auth.userId)
     .single();
 
-  if (!user || !(await bcrypt.compare(req.body.currentPassword, user.password))) {
+  if (!user || !user.password || !(await bcrypt.compare(currentPassword, user.password))) {
     throw new ApiError(401, 'Current password is incorrect');
   }
 
-  const hashed = await bcrypt.hash(req.body.newPassword, 10);
+  const hashed = await bcrypt.hash(newPassword, 10);
   await supabase
     .from('users')
     .update({ password: hashed })

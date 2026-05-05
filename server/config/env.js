@@ -7,6 +7,13 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '..', '.env'), override: false });
 
+// Normalize FRONTEND_URL once at boot — strips any trailing slash.
+// Fixes: CORS exact-match failure (browser sends origin without slash),
+//        Stripe redirect double-slash URLs, email template links.
+if (process.env.FRONTEND_URL) {
+  process.env.FRONTEND_URL = process.env.FRONTEND_URL.replace(/\/+$/, '');
+}
+
 const REQUIRED_ENV = {
   auth:       ['JWT_SECRET'],
   supabase:   ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],

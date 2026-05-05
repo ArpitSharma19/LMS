@@ -37,17 +37,34 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
+// Build allowed-origins set once at startup.
+// FRONTEND_URL is already trailing-slash-stripped by config/env.js.
+const ALLOWED_ORIGINS = new Set(
+  [
+    'https://brainlyft-app.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL,         // covers any custom domain in env
+  ].filter(Boolean)
+);
+
 const corsOptions = {
-  origin: ["http://localhost:5173", process.env.FRONTEND_URL].filter(Boolean),
+  origin: (origin, callback) => {
+    // No origin = same-origin request, server-to-server (Stripe webhooks), curl
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.has(origin)) return callback(null, true);
+    callback(new Error(`CORS: origin '${origin}' not allowed`));
+  },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'stripe-signature'],
+  optionsSuccessStatus: 200, // IE11 chokes on 204
 };
 
+// CORS must be first — before rate limiters, routes, and body parsers
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); 
 
-app.use(morgan('dev'));
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use('/api', commonLimiter);
 
 // Webhook handling (must be before express.json)
