@@ -1,225 +1,168 @@
-import React, { useContext, useEffect, useState } from 'react';
-import Footer from '../../components/student/Footer';
-import { assets } from '../../assets/assets';
-import { useParams } from 'react-router-dom';
-import axios from 'axios';
-import { AppContext } from '../../context/AppContext';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import StudentLayout from '../../layouts/StudentLayout';
+import api from '../../services/api';
+import { useStore } from '../../context/AuthContext';
 import { toast } from 'react-toastify';
-import humanizeDuration from 'humanize-duration'
-import YouTube from 'react-youtube';
-import { useAuth } from '@clerk/clerk-react';
-import Loading from '../../components/student/Loading';
+import { formatCurrency } from '../../utils/currency';
 
 const CourseDetails = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { token, calculateRating } = useStore();
 
-  const { id } = useParams()
+  const [course, setCourse] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [isEnrolling, setIsEnrolling] = useState(false);
 
-  const [courseData, setCourseData] = useState(null)
-  const [playerData, setPlayerData] = useState(null)
-  const [isAlreadyEnrolled, setIsAlreadyEnrolled] = useState(false)
-
-  const { backendUrl, currency, userData, calculateChapterTime, calculateCourseDuration, calculateRating, calculateNoOfLectures } = useContext(AppContext)
-  const { getToken } = useAuth()
-
-
-  const fetchCourseData = async () => {
-
+  const fetchData = useCallback(async () => {
     try {
-
-      const { data } = await axios.get(backendUrl + '/api/course/' + id)
-
-      if (data.success) {
-        setCourseData(data.courseData)
-      } else {
-        toast.error(data.message)
-      }
-
+      setLoading(true);
+      const [{ data: cData }, { data: eData }] = await Promise.all([
+        api.get(`/api/course/${id}`),
+        token ? api.get('/api/user/enrolled-courses') : Promise.resolve({ data: { enrolledCourses: [] } })
+      ]);
+      
+      if (cData.success) setCourse(cData.courseData);
+      if (eData.success) setIsEnrolled(eData.enrolledCourses.some(c => String(c.id) === String(id)));
     } catch (error) {
-
-      toast.error(error.message)
-
+      toast.error('Failed to load course details');
+      navigate('/');
+    } finally {
+      setLoading(false);
     }
+  }, [id, navigate, token]);
 
-  }
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  const [openSections, setOpenSections] = useState({});
-
-  const toggleSection = (index) => {
-    setOpenSections((prev) => ({
-      ...prev,
-      [index]: !prev[index],
-    }));
+  const handleEnroll = async () => {
+    if (!token) return navigate('/login', { state: { from: `/course/${id}` } });
+    try {
+      setIsEnrolling(true);
+      const { data } = await api.post('/api/payment/create-checkout-session', { courseId: id });
+      if (data.success) {
+        if (data.isFree) {
+          toast.success('Enrolled successfully!');
+          setIsEnrolled(true);
+          navigate(`/player/${id}`);
+        } else if (data.url) {
+          window.location.href = data.url; // Redirect to Stripe
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Enrollment failed');
+    } finally {
+      setIsEnrolling(false);
+    }
   };
 
+  if (loading) return <StudentLayout title="Loading Course..."><div className="animate-pulse flex flex-col gap-xl"><div className="h-10 bg-surface-container w-3/4 rounded" /><div className="grid grid-cols-1 lg:grid-cols-12 gap-xxl"><div className="lg:col-span-8 space-y-6"><div className="aspect-video bg-surface-container rounded-xl" /><div className="h-40 bg-surface-container rounded-xl" /></div><div className="lg:col-span-4"><div className="h-80 bg-surface-container rounded-xl" /></div></div></div></StudentLayout>;
+  if (!course) return null;
 
-  const enrollCourse = async () => {
+  const rating = Number(course.ratingAverage) || 4.8;
+  const discountedPrice = Number(course.coursePrice) - (Number(course.discount || 0) * Number(course.coursePrice) / 100);
 
-    try {
-
-      if (!userData) {
-        return toast.warn('Login to Enroll')
-      }
-
-      if (isAlreadyEnrolled) {
-        return toast.warn('Already Enrolled')
-      }
-
-      const token = await getToken();
-
-      const { data } = await axios.post(backendUrl + '/api/user/purchase',
-        { courseId: courseData._id },
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-
-      if (data.success) {
-        const { session_url } = data
-        window.location.replace(session_url)
-      } else {
-        toast.error(data.message)
-      }
-
-    } catch (error) {
-      toast.error(error.message)
-    }
-  }
-
-  useEffect(() => {
-    fetchCourseData()
-  }, [])
-
-  useEffect(() => {
-
-    if (userData && courseData) {
-      setIsAlreadyEnrolled(userData.enrolledCourses.includes(courseData._id))
-    }
-
-  }, [userData, courseData])
-
-  return courseData ? (
-    <>
-      <div className="flex md:flex-row flex-col-reverse gap-10 relative items-start justify-between md:px-36 px-8 md:pt-20 pt-10 text-left">
-        <div className="absolute top-0 left-0 w-full h-section-height -z-1 bg-linear-to-b from-cyan-100/70"></div>
-
-        <div className="max-w-xl z-10 text-gray-500">
-          <h1 className="md:text-course-deatails-heading-large text-course-deatails-heading-small font-semibold text-gray-800">
-            {courseData.courseTitle}
-          </h1>
-          <p className="pt-4 md:text-base text-sm" dangerouslySetInnerHTML={{ __html: courseData.courseDescription.slice(0, 200) }}>
-          </p>
-
-          <div className='flex items-center space-x-2 pt-3 pb-1 text-sm'>
-            <p>{calculateRating(courseData)}</p>
-            <div className='flex'>
-              {[...Array(5)].map((_, i) => (<img key={i} src={i < Math.floor(calculateRating(courseData)) ? assets.star : assets.star_blank} alt=''
-                className='w-3.5 h-3.5' />
-              ))}
-            </div>
-            <p className='text-blue-600'>({courseData.courseRatings.length} {courseData.courseRatings.length > 1 ? 'ratings' : 'rating'})</p>
-
-            <p>{courseData.enrolledStudents.length} {courseData.enrolledStudents.length > 1 ? 'students' : 'student'}</p>
-          </div>
-
-          <p className='text-sm'>Course by <span className='text-blue-600 underline'>{courseData.educator.name}</span></p>
-
-          <div className="pt-8 text-gray-800">
-            <h2 className="text-xl font-semibold">Course Structure</h2>
-            <div className="pt-5">
-              {courseData.courseContent.map((chapter, index) => (
-                <div key={index} className="border border-gray-300 bg-white mb-2 rounded">
-                  <div
-                    className="flex items-center justify-between px-4 py-3 cursor-pointer select-none"
-                    onClick={() => toggleSection(index)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <img src={assets.down_arrow_icon} alt="arrow icon" className={`transform transition-transform ${openSections[index] ? "rotate-180" : ""}`} />
-                      <p className="font-medium md:text-base text-sm">{chapter.chapterTitle}</p>
-                    </div>
-                    <p className="text-sm md:text-default">{chapter.chapterContent.length} lectures - {calculateChapterTime(chapter)}</p>
-                  </div>
-
-                  <div className={`overflow-hidden transition-all duration-300 ${openSections[index] ? "max-h-96" : "max-h-0"}`} >
-                    <ul className="list-disc md:pl-10 pl-4 pr-4 py-2 text-gray-600 border-t border-gray-300">
-                      {chapter.chapterContent.map((lecture, i) => (
-                        <li key={i} className="flex items-start gap-2 py-1">
-                          <img src={assets.play_icon} alt="bullet icon" className="w-4 h-4 mt-1" />
-                          <div className="flex items-center justify-between w-full text-gray-800 text-xs md:text-default">
-                            <p>{lecture.lectureTitle}</p>
-                            <div className='flex gap-2'>
-                              {lecture.isPreviewFree && <p onClick={() => setPlayerData({
-                                videoId: lecture.lectureUrl.split('/').pop()
-                              })} className='text-blue-500 cursor-pointer'>Preview</p>}
-                              <p>{humanizeDuration(lecture.lectureDuration * 60 * 1000, { units: ['h', 'm'] })}</p>
-                            </div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+  return (
+    <StudentLayout title={course.courseTitle} subtitle={`Created by ${course.educatorDetails?.name}`}>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-xxl animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="lg:col-span-8 flex flex-col gap-xl">
+          <div className="flex flex-col gap-md">
+            <h1 className="text-2xl font-bold text-on-surface">{course.courseTitle}</h1>
+            <p className="text-body-lg text-on-surface-variant line-clamp-3" dangerouslySetInnerHTML={{ __html: course.courseDescription }} />
+            <div className="flex flex-wrap items-center gap-md mt-sm">
+              <div className="flex items-center gap-xs bg-surface-container-high px-3 py-1.5 rounded-full">
+                <div className="flex mr-1">
+                   {[1, 2, 3, 4, 5].map((star) => (
+                      <span key={star} className="material-symbols-outlined text-[18px] text-[#f59e0b]" style={{ fontVariationSettings: `'FILL' ${rating >= star ? 1 : 0}` }}>
+                         {rating >= star ? 'star' : (rating >= star - 0.5 ? 'star_half' : 'star')}
+                      </span>
+                   ))}
                 </div>
-              ))}
+                <span className="text-label-caps text-on-surface font-bold">{rating}</span>
+                <span className="text-body-sm text-on-surface-variant">({course.ratingCount || 0} reviews)</span>
+              </div>
+              <div className="flex items-center gap-xs text-on-surface-variant"><span className="material-symbols-outlined text-[18px]">group</span><span className="text-body-sm">Enrolled Students</span></div>
             </div>
           </div>
 
-          <div className="py-20 text-sm md:text-default">
-            <h3 className="text-xl font-semibold text-gray-800">Course Description</h3>
-            <p className="rich-text pt-3" dangerouslySetInnerHTML={{ __html: courseData.courseDescription }}>
-            </p>
+          <div className="relative aspect-video rounded-xl overflow-hidden border border-outline-variant/30 shadow-md bg-surface-container group">
+            <img alt={course.courseTitle} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" src={course.courseThumbnail} />
+          </div>
+
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg shadow-sm">
+            <h2 className="text-xl font-semibold text-on-surface mb-md">About this course</h2>
+            <div className="text-body-md text-on-surface-variant space-y-4 rich-text" dangerouslySetInnerHTML={{ __html: course.courseDescription }} />
+          </div>
+
+          <div className="bg-surface-container-lowest rounded-xl border border-outline-variant p-lg shadow-sm flex flex-col md:flex-row gap-lg items-start">
+            <img src={course.educatorDetails?.imageUrl} alt={course.educatorDetails?.name} className="w-20 h-20 rounded-full object-cover border border-outline-variant" />
+            <div className="flex-1">
+              <h3 className="text-h4 font-semibold text-on-surface mb-xs">{course.educatorDetails?.name}</h3>
+              <p className="text-body-sm text-on-surface-variant mb-md">Instructor in {course.category}</p>
+              <button onClick={() => navigate(`/educator/${course.educatorDetails?.id || course.educator}`)} className="text-primary font-bold uppercase tracking-widest text-[11px] hover:underline">View Full Profile</button>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-xl font-semibold text-on-surface mb-lg">Course Curriculum</h2>
+            <div className="flex flex-col gap-sm">
+              {course.courseContent?.map((chapter, i) => (
+                <details key={chapter.id} className="group bg-surface-container-lowest border border-outline-variant rounded-lg overflow-hidden" open={i === 0}>
+                  <summary className="flex items-center justify-between p-md cursor-pointer hover:bg-surface-container-low transition-colors outline-none">
+                    <div className="flex items-center gap-md"><span className="material-symbols-outlined text-on-surface-variant group-open:rotate-180 transition-transform">expand_more</span><span className="text-h6 font-semibold text-on-surface">{chapter.chapterTitle}</span></div>
+                    <span className="text-body-sm text-on-surface-variant hidden md:block">{chapter.chapterContent?.length || 0} Lessons</span>
+                  </summary>
+                  <div className="px-md pb-md pt-2 border-t border-outline-variant/30 flex flex-col gap-xs">
+                    {chapter.chapterContent?.map((lecture) => (
+                      <button 
+                        key={lecture.id} 
+                        onClick={() => navigate(`/player/${id}/${lecture.id}`)}
+                        className="w-full flex items-center justify-between py-2 px-3 hover:bg-surface-container-low rounded transition-colors group/lesson text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="material-symbols-outlined text-[20px] text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>play_circle</span>
+                          <span className="text-body-sm text-on-surface font-medium">{lecture.lectureTitle}</span>
+                        </div>
+                        <span className="text-body-sm text-on-surface-variant font-bold">
+                          {Math.floor(lecture.lectureDuration / 60)}:{(lecture.lectureDuration % 60).toString().padStart(2, '0')}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="max-w-course-card z-10 shadow-custom-card rounded-t md:rounded-none overflow-hidden bg-white min-w-[300px] sm:min-w-[420px]">
-          {
-            playerData
-              ? <YouTube videoId={playerData.videoId} opts={{ playerVars: { autoplay: 1 } }} iframeClassName='w-full aspect-video' />
-              : <img src={courseData.courseThumbnail} alt="" />
-          }
-          <div className="p-5">
-            <div className="flex items-center gap-2">
-              <img className="w-3.5" src={assets.time_left_clock_icon} alt="time left clock icon" />
-              <p className="text-red-500">
-                <span className="font-medium">5 days</span> left at this price!
-              </p>
-            </div>
-            <div className="flex gap-3 items-center pt-2">
-              <p className="text-gray-800 md:text-4xl text-2xl font-semibold">{currency}{(courseData.coursePrice - courseData.discount * courseData.coursePrice / 100).toFixed(2)}</p>
-              <p className="md:text-lg text-gray-500 line-through">{currency}{courseData.coursePrice}</p>
-              <p className="md:text-lg text-gray-500">{courseData.discount}% off</p>
-            </div>
-            <div className="flex items-center text-sm md:text-default gap-4 pt-2 md:pt-4 text-gray-500">
-              <div className="flex items-center gap-1">
-                <img src={assets.star} alt="star icon" />
-                <p>{calculateRating(courseData)}</p>
+        <div className="lg:col-span-4">
+          <div className="sticky top-[100px] bg-surface-container-lowest rounded-xl border border-outline-variant shadow-xl overflow-hidden flex flex-col">
+            <div className="p-lg border-b border-outline-variant/50">
+              <div className="flex items-end gap-sm mb-sm">
+                <span className="text-2xl font-bold text-on-surface">{discountedPrice === 0 ? 'Free' : formatCurrency(discountedPrice)}</span>
+                {course.discount > 0 && <span className="text-body-md text-on-surface-variant line-through mb-1">{formatCurrency(course.coursePrice)}</span>}
               </div>
-              <div className="h-4 w-px bg-gray-500/40"></div>
-              <div className="flex items-center gap-1">
-                <img src={assets.time_clock_icon} alt="clock icon" />
-                <p>{calculateCourseDuration(courseData)}</p>
-              </div>
-              <div className="h-4 w-px bg-gray-500/40"></div>
-              <div className="flex items-center gap-1">
-                <img src={assets.lesson_icon} alt="clock icon" />
-                <p>{calculateNoOfLectures(courseData)} lessons</p>
-              </div>
+              {course.discount > 0 && <div className="text-label-caps text-error bg-error-container inline-block px-2 py-1 rounded mb-md font-bold">{course.discount}% OFF</div>}
+              
+              <button disabled={isEnrolling} onClick={isEnrolled ? () => navigate(`/player/${id}`) : handleEnroll} className={`w-full py-3 px-6 rounded-lg text-h6 font-semibold transition-all shadow-md flex items-center justify-center gap-2 group ${isEnrolled ? 'bg-secondary text-on-secondary hover:bg-secondary/90' : 'bg-primary text-on-primary hover:bg-primary/90'}`}>
+                {isEnrolling ? 'Enrolling...' : (isEnrolled ? 'Go to Player' : (course.coursePrice === 0 ? 'Enroll for Free' : 'Enroll Now'))}
+                <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
+              </button>
+              <p className="text-center text-body-sm text-on-surface-variant mt-sm">30-day money-back guarantee</p>
             </div>
-            <button onClick={enrollCourse} className="md:mt-6 mt-4 w-full py-3 rounded bg-blue-600 text-white font-medium">
-              {isAlreadyEnrolled ? "Already Enrolled" : "Enroll Now"}
-            </button>
-            <div className="pt-6">
-              <p className="md:text-xl text-lg font-medium text-gray-800">What's in the course?</p>
-              <ul className="ml-4 pt-2 text-sm md:text-default list-disc text-gray-500">
-                <li>Lifetime access with free updates.</li>
-                <li>Step-by-step, hands-on project guidance.</li>
-                <li>Downloadable resources and source code.</li>
-                <li>Quizzes to test your knowledge.</li>
-                <li>Certificate of completion.</li>
-              </ul>
+            <div className="p-lg bg-surface flex flex-col gap-sm">
+              <h4 className="text-h6 font-semibold text-on-surface mb-xs">This course includes:</h4>
+              {[ {i: 'ondemand_video', t: 'Video content'}, {i: 'article', t: 'Resources'}, {i: 'all_inclusive', t: 'Lifetime access'}, {i: 'military_tech', t: 'Certificate'} ].map((item, idx) => (
+                <div key={idx} className="flex items-center gap-3 text-on-surface-variant"><span className="material-symbols-outlined text-[20px]">{item.i}</span><span className="text-body-md">{item.t}</span></div>
+              ))}
             </div>
           </div>
         </div>
       </div>
-      <Footer />
-    </>
-  ) : <Loading />
+    </StudentLayout>
+  );
 };
+
 
 export default CourseDetails;

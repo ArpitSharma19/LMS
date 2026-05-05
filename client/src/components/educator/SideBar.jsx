@@ -1,11 +1,11 @@
 import React, { useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { assets } from '../../assets/assets';
-import { AppContext } from '../../context/AppContext';
+import { useStore } from '../../context/AuthContext';
 
 const SideBar = () => {
 
-  const { isEducator } = useContext(AppContext)
+  const { isEducator } = useStore()
 
   const menuItems = [
     { name: 'Dashboard', path: '/educator', icon: assets.home_icon },

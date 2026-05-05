@@ -1,18 +1,49 @@
-import mongoose from "mongoose";
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/database.js';
 
-const PurchaseSchema = new mongoose.Schema({
-    courseId: { type: mongoose.Schema.Types.ObjectId,
-        ref: 'Course',
-        required: true
+const Purchase = sequelize.define('Purchase', {
+  id: {
+    type: DataTypes.INTEGER,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  courseId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
+  amount: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'completed', 'failed'),
+    defaultValue: 'pending',
+  },
+  commissionAmount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+  },
+  educatorAmount: {
+    type: DataTypes.DECIMAL(10, 2),
+    defaultValue: 0.00,
+  },
+}, {
+  timestamps: true,
+  indexes: [
+    {
+      fields: ['userId'],
     },
-    userId: {
-        type: String,
-        ref: 'User',
-        required: true
+    {
+      fields: ['courseId'],
     },
-    amount: { type: Number, required: true },
-    status: { type: String, enum: ['pending', 'completed', 'failed'], default: 'pending' }
+    {
+      fields: ['status'],
+    }
+  ]
+});
 
-}, { timestamps: true });
-
-export const Purchase = mongoose.model('Purchase', PurchaseSchema);
+export default Purchase;

@@ -1,48 +1,59 @@
-import mongoose from 'mongoose';
+import { DataTypes } from 'sequelize';
+import { sequelize } from '../config/database.js';
 
-const lectureSchema = new mongoose.Schema({
-    lectureId: { type: String, required: true },
-    lectureTitle: { type: String, required: true },
-    lectureDuration: { type: Number, required: true },
-    lectureUrl: { type: String, required: true },
-    isPreviewFree: { type: Boolean, required: true },
-    lectureOrder: { type: Number, required: true }
-}, { _id: false }); 
-
-const chapterSchema = new mongoose.Schema({
-    chapterId: { type: String, required: true },
-    chapterOrder: { type: Number, required: true },
-    chapterTitle: { type: String, required: true },
-    chapterContent: [lectureSchema] // Use the lecture schema here
-}, { _id: false });
-
-const courseSchema = new mongoose.Schema({
-    courseTitle: { type: String, required: true },
-    courseDescription: { type: String, required: true },
-    courseThumbnail: { type: String },
-    coursePrice: { type: Number, required: true },
-    isPublished: { type: Boolean, default: true },
-    discount: { type: Number, required: true, min: 0, max: 100 },
-    courseContent: [chapterSchema], // Use the chapter schema here
-    educator: {
-        type: String,
-        ref: 'User',
-        required: true
+const Course = sequelize.define('Course', {
+  id: {
+    type: DataTypes.INTEGER,
+    primaryKey: true,
+    autoIncrement: true,
+  },
+  courseTitle: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  courseDescription: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  courseThumbnail: {
+    type: DataTypes.STRING,
+  },
+  coursePrice: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+  },
+  isPublished: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+  },
+  discount: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+    defaultValue: 0,
+    validate: {
+      min: 0,
+      max: 100,
     },
-    courseRatings: [
-        {
-            userId: { type: String },
-            rating: { type: Number, min: 1, max: 5 }
-        }
-    ],
-    enrolledStudents: [
-        {
-            type: String,
-            ref: 'User'
-        }
-    ],
-}, { timestamps: true, minimize: false });
-
-const Course = mongoose.model('Course', courseSchema);
+  },
+  educator: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
+  category: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    defaultValue: 'General',
+  },
+  ratingAverage: {
+    type: DataTypes.DECIMAL(3, 2),
+    defaultValue: 0,
+  },
+  ratingCount: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+  },
+}, {
+  timestamps: true,
+});
 
 export default Course;
