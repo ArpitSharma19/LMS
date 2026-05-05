@@ -1,17 +1,14 @@
 import jwt from 'jsonwebtoken';
-import { User, Educator } from '../models/index.js';
+import { supabase } from '../config/supabase.js';
 
 // Attach req.auth.userId from JWT — preserves API contract across all controllers
 export const protect = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    console.log("🔍 AUTH DEBUG: Authorization Header:", authHeader);
     
     const token = authHeader?.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-    console.log("🔍 AUTH DEBUG: Extracted Token:", token ? "Exists (Redacted)" : "MISSING");
 
     if (!token) {
-      console.warn("⚠️ AUTH WARN: No token provided");
       return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
 
@@ -59,12 +56,12 @@ export const protectEducator = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const userId = decoded.id;
 
-    const user = await User.findByPk(userId);
+    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
     if (!user || user.role !== 'educator') {
       return res.status(403).json({ success: false, message: 'Unauthorized: Educator access only' });
     }
 
-    const educatorProfile = await Educator.findOne({ where: { userId } });
+    const { data: educatorProfile } = await supabase.from('educators').select('*').eq('user_id', userId).single();
     if (!educatorProfile || educatorProfile.status !== 'active') {
       return res.status(403).json({ success: false, message: 'Educator account not yet approved' });
     }

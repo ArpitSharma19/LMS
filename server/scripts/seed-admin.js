@@ -1,12 +1,10 @@
 import '../config/env.js';
-import { connectDB, sequelize } from '../config/database.js';
-import { Admin, CommissionSettings } from '../models/index.js';
+import { supabase } from '../config/supabase.js';
 import bcrypt from 'bcryptjs';
 
 async function seedAdmin() {
   try {
-    await connectDB();
-    await sequelize.sync();
+    console.log("🚀 Seeding Admin...");
     
     // Seed Admin
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@lms.com';
@@ -14,35 +12,32 @@ async function seedAdmin() {
     
     const hashedAdminPassword = await bcrypt.hash(adminPassword, 10);
     
-    const [admin, created] = await Admin.findOrCreate({
-      where: { email: adminEmail },
-      defaults: {
-        password: hashedAdminPassword
-      }
-    });
+    const { data: existingAdmin } = await supabase.from('admins').select('*').eq('email', adminEmail).single();
 
-    if (created) {
+    if (!existingAdmin) {
+      await supabase.from('admins').insert([{
+        email: adminEmail,
+        password: hashedAdminPassword
+      }]);
       console.log(`✅ Admin created: ${adminEmail}`);
     } else {
-      admin.password = hashedAdminPassword;
-      await admin.save();
+      await supabase.from('admins').update({ password: hashedAdminPassword }).eq('id', existingAdmin.id);
       console.log(`✅ Admin updated: ${adminEmail}`);
     }
 
     // Seed Commission Settings
-    const [settings, sCreated] = await CommissionSettings.findOrCreate({
-      where: { id: 1 },
-      defaults: {
-        platformPercentage: 20.00
-      }
-    });
+    const { data: existingSettings } = await supabase.from('commission_settings').select('*').limit(1).single();
 
-    if (sCreated) {
+    if (!existingSettings) {
+      await supabase.from('commission_settings').insert([{
+        platform_percentage: 20.00
+      }]);
       console.log(`✅ Commission settings initialized to 20%`);
     } else {
       console.log(`✅ Commission settings already exist`);
     }
 
+    console.log("✅ Seeding Complete");
     process.exit(0);
   } catch (error) {
     console.error('❌ Seed Error:', error.message);

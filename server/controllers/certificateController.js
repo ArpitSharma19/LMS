@@ -1,4 +1,4 @@
-import { User, Course, Purchase, CommissionSettings, RevenueTracking, sequelize } from '../models/index.js';
+import { supabase } from '../config/supabase.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
 
@@ -10,42 +10,45 @@ export const requestCertificate = catchAsync(async (req, res) => {
     throw new ApiError(400, "Course ID is required");
   }
 
-  const t = await sequelize.transaction();
-  try {
-    // Check if course completed/enrolled
-    const purchase = await Purchase.findOne({ 
-      where: { userId, courseId, status: 'completed' },
-      transaction: t
-    });
+  // Check if course completed/enrolled
+  const { data: purchase } = await supabase
+    .from('purchases')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('course_id', courseId)
+    .eq('status', 'completed')
+    .single();
 
-    if (!purchase) {
-      throw new ApiError(403, 'You must be enrolled in the course to request a certificate');
-    }
-
-    const settings = await CommissionSettings.findOne({ transaction: t });
-    const fee = settings ? parseFloat(settings.certificateFee) : 50.00;
-
-    // Simulate payment success
-    let revenue = await RevenueTracking.findOne({ transaction: t });
-    if (!revenue) {
-        revenue = await RevenueTracking.create({
-            totalRevenue: 0,
-            totalCommission: 0,
-            totalEducatorEarnings: 0
-        }, { transaction: t });
-    }
-    
-    revenue.totalRevenue = parseFloat((parseFloat(revenue.totalRevenue) + fee).toFixed(2));
-    revenue.totalCommission = parseFloat((parseFloat(revenue.totalCommission) + fee).toFixed(2));
-    await revenue.save({ transaction: t });
-
-    await t.commit();
-    res.status(200).json({ 
-        success: true, 
-        message: `Certificate requested successfully. Platform fee: ₹${fee.toFixed(2)}` 
-    });
-  } catch (error) {
-    await t.rollback();
-    throw error;
+  if (!purchase) {
+    throw new ApiError(403, 'You must be enrolled in the course to request a certificate');
   }
+
+  const { data: settings } = await supabase.from('commission_settings').select('*').limit(1).single();
+  const fee = settings ? parseFloat(settings.certificate_fee) : 50.00;
+
+  // Simulate payment success
+  const { data: revenue } = await supabase.from('revenue_tracking').select('*').limit(1).single();
+  
+  if (revenue) {
+    await supabase
+        .from('revenue_tracking')
+        .update({
+            total_revenue: parseFloat((parseFloat(revenue.total_revenue) + fee).toFixed(2)),
+            total_commission: parseFloat((parseFloat(revenue.total_commission) + fee).toFixed(2))
+        })
+        .eq('id', revenue.id);
+  } else {
+    await supabase
+        .from('revenue_tracking')
+        .insert([{
+            total_revenue: fee.toFixed(2),
+            total_commission: fee.toFixed(2),
+            total_educator_earnings: 0
+        }]);
+  }
+
+  res.status(200).json({ 
+      success: true, 
+      message: `Certificate requested successfully. Platform fee: ₹${fee.toFixed(2)}` 
+  });
 });

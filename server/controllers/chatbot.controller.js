@@ -1,5 +1,5 @@
 import { getChatCompletion } from "../services/groq.service.js";
-import { ChatHistory } from "../models/index.js";
+import { supabase } from "../config/supabase.js";
 import ApiError from "../utils/ApiError.js";
 import catchAsync from "../utils/catchAsync.js";
 
@@ -19,8 +19,10 @@ export const chat = catchAsync(async (req, res) => {
 
     const userId = req.auth?.userId;
     if (userId) {
-      await ChatHistory.create({ userId, role: "user", content: message.trim() });
-      await ChatHistory.create({ userId, role: "assistant", content: reply });
+      await supabase.from('chat_histories').insert([
+        { user_id: userId, role: "user", content: message.trim() },
+        { user_id: userId, role: "assistant", content: reply }
+      ]);
     }
 
     res.json({ success: true, data: { reply } });

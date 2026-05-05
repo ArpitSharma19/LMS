@@ -1,12 +1,10 @@
-// Must be the very first import so dotenv loads before database.js and other modules execute
+// Must be the very first import so dotenv loads
 import './config/env.js';
 
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
-
-import { connectDB, sequelize } from "./config/database.js";
-import "./models/index.js";
+import { supabase } from "./config/supabase.js";
 
 import connectCloudinary from "./config/cloudinary.js";
 
@@ -38,30 +36,36 @@ app.use(helmet({
       upgradeInsecureRequests: [],
     },
   },
-  crossOriginEmbedderPolicy: false, // Required for some external media
+  crossOriginEmbedderPolicy: false, 
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
+
 const corsOptions = {
-  origin: "http://localhost:5173",
+  origin: ["http://localhost:5173", process.env.FRONTEND_URL].filter(Boolean),
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle preflight for all routes
+app.options('*', cors(corsOptions)); 
 
 app.use(morgan('dev'));
 app.use('/api', commonLimiter);
 
-// Webhook handling requires raw body (configured inside paymentRouter)
+// Webhook handling
 app.use("/api/payment", paymentRouter);
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 app.get("/", (req, res) => {
-  res.send("🚀 LMS API Running");
+  res.send("🚀 LMS API Running with Supabase");
+});
+
+app.get("/test-supabase", async (req, res) => {
+  const { data, error } = await supabase.from("users").select("id, name").limit(1);
+  res.json({ success: !error, data, error });
 });
 
 app.use("/api/user", userRouter);
@@ -76,12 +80,7 @@ app.use(errorMiddleware);
 
 const startServer = async () => {
   try {
-    console.log("🚀 Starting LMS Server...");
-
-    await connectDB();
-
-    await sequelize.sync({ alter: false });
-    console.log("✅ Database Ready");
+    console.log("🚀 Starting LMS Server (Supabase)...");
 
     try {
       await connectCloudinary();
