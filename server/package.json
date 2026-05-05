@@ -14,7 +14,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "bcryptjs": "^3.0.3",
-    "cloudinary": "latest",
+    "cloudinary": "2.3.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "cookie": "^1.0.2",
@@ -27,7 +27,7 @@
     "multer": "^1.4.5-lts.1",
     "nanoid": "^5.0.7",
     "nodemailer": "^6.9.15",
-    "stripe": "^17.4.0",
+    "stripe": "14.21.0",
     "winston": "^3.15.0",
     "zod": "^3.23.8"
   },
