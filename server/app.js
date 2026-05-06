@@ -16,6 +16,7 @@ import authRouter from "./routes/authRoutes.js";
 import certificateRouter from "./routes/certificateRoutes.js";
 import paymentRouter from "./routes/paymentRoutes.js";
 import healthRouter from "./routes/healthRoutes.js";
+import seedRouter from "./routes/seedRoutes.js";
 
 const app = express();
 
@@ -88,6 +89,7 @@ app.use("/api/chatbot", chatbotRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/certificate", certificateRouter);
+app.use("/api/seed", seedRouter);
 
 // Catch-all 404 handler
 app.use("*", (req, res) => {
