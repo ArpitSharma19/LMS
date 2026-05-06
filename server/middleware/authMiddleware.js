@@ -61,7 +61,7 @@ export const protectEducator = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Unauthorized: Educator access only' });
     }
 
-    const { data: educatorProfile } = await supabase.from('educators').select('*').eq('user_id', userId).single();
+    const { data: educatorProfile } = await supabase.from('educators').select('*').eq('userid', userId).single();
     if (!educatorProfile || educatorProfile.status !== 'active') {
       return res.status(403).json({ success: false, message: 'Educator account not yet approved' });
     }

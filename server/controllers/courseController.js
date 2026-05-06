@@ -10,14 +10,13 @@ export const getAllCourses = catchAsync(async (req, res) => {
         .from('courses')
         .select(`
             *,
-            educatorDetails:users (id, name, image_url)
+            educatorDetails:users (id, name, imageUrl)
         `, { count: 'exact' })
-        .eq('is_published', true);
+        .eq('ispublished', true);
 
-    // Handling sort
-    if (sort === 'price_low') query = query.order('course_price', { ascending: true });
-    else if (sort === 'price_high') query = query.order('course_price', { ascending: false });
-    else if (sort === 'popular') query = query.order('rating_count', { ascending: false }); // Fallback to rating_count if purchaseCount is hard to join
+    if (sort === 'price_low') query = query.order('courseprice', { ascending: true });
+    else if (sort === 'price_high') query = query.order('courseprice', { ascending: false });
+    else if (sort === 'popular') query = query.order('ratingcount', { ascending: false });
     else query = query.order('created_at', { ascending: false });
 
     const { data: courses, count, error } = await query
@@ -25,12 +24,12 @@ export const getAllCourses = catchAsync(async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ 
-        success: true, 
-        courses, 
-        totalCourses: count, 
-        page: parseInt(page), 
-        totalPages: Math.ceil(count / parseInt(limit)) 
+    res.json({
+        success: true,
+        courses,
+        totalCourses: count,
+        page: parseInt(page),
+        totalPages: Math.ceil((count ?? 0) / parseInt(limit)),
     });
 });
 
@@ -38,11 +37,11 @@ export const getCourseCategories = catchAsync(async (req, res) => {
     const { data: courses, error } = await supabase
         .from('courses')
         .select('category')
-        .eq('is_published', true);
-    
+        .eq('ispublished', true);
+
     if (error) throw error;
 
-    const categories = [...new Set(courses.map(c => c.category))].filter(Boolean);
+    const categories = [...new Set((courses ?? []).map(c => c.category))].filter(Boolean);
     res.json({ success: true, categories });
 });
 
@@ -51,16 +50,16 @@ export const getCourseId = catchAsync(async (req, res) => {
         .from('courses')
         .select(`
             *,
-            educatorDetails:users (id, name, image_url),
+            educatorDetails:users (id, name, imageUrl),
             courseContent:chapters (
                 *,
                 chapterContent:lectures (*)
             ),
-            courseRatings:ratings (user_id, rating)
+            courseRatings:ratings (userid, rating)
         `)
         .eq('id', req.params.id)
         .single();
 
-    if (error || !course) throw new ApiError(404, "Course not found");
+    if (error || !course) throw new ApiError(404, 'Course not found');
     res.json({ success: true, courseData: course });
 });

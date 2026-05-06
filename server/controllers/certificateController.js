@@ -14,8 +14,8 @@ export const requestCertificate = catchAsync(async (req, res) => {
   const { data: purchase } = await supabase
     .from('purchases')
     .select('*')
-    .eq('user_id', userId)
-    .eq('course_id', courseId)
+    .eq('userid', userId)
+    .eq('courseid', courseId)
     .eq('status', 'completed')
     .single();
 

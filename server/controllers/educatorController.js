@@ -5,17 +5,16 @@ import catchAsync from '../utils/catchAsync.js';
 
 export const updateRoleToEducator = catchAsync(async (req, res) => {
     const userId = req.auth.userId;
-    
-    // Check user and educator profile
-    const { data: user } = await supabase.from('users').select('*').eq('id', userId).single();
+
+    const { data: user } = await supabase.from('users').select('id, role').eq('id', userId).single();
     if (!user) throw new ApiError(404, 'User not found');
 
-    let { data: profile } = await supabase.from('educators').select('*').eq('user_id', userId).single();
-    
+    let { data: profile } = await supabase.from('educators').select('*').eq('userid', userId).maybeSingle();
+
     if (!profile) {
         const { data: newProfile, error } = await supabase
             .from('educators')
-            .insert([{ user_id: userId, status: 'pending' }])
+            .insert([{ userid: userId, status: 'pending' }])
             .select()
             .single();
         if (error) throw error;
@@ -43,21 +42,20 @@ export const addCourse = catchAsync(async (req, res) => {
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
         const result = await uploadBuffer(thumb.buffer);
-        parsed.course_thumbnail = result.secure_url;
+        parsed.coursethumbnail = result.secure_url;
     }
 
     const { courseContent, ...fields } = parsed;
     const courseFields = {
-        course_title: fields.courseTitle,
-        course_description: fields.courseDescription,
-        course_price: fields.coursePrice,
-        discount: fields.discount,
-        course_thumbnail: fields.course_thumbnail || fields.courseThumbnail,
-        is_published: fields.isPublished,
+        coursetitle: fields.courseTitle,
+        coursedescription: fields.courseDescription,
+        courseprice: fields.coursePrice,
+        discount: fields.discount ?? 0,
+        coursethumbnail: parsed.coursethumbnail || fields.courseThumbnail || null,
+        ispublished: fields.isPublished ?? false,
         category: fields.category,
-        educator: userId,
-        level: fields.level,
-        language: fields.language,
+        educator_id: userId,
+        // level and language kept as-is; add to schema if needed
     };
 
     const { data: newCourse, error: courseError } = await supabase
@@ -72,9 +70,9 @@ export const addCourse = catchAsync(async (req, res) => {
         const { data: chapter, error: chapterError } = await supabase
             .from('chapters')
             .insert([{
-                course_id: newCourse.id,
-                chapter_title: ch.chapterTitle,
-                chapter_order: ch.chapterOrder || cIdx,
+                courseid: newCourse.id,
+                chaptertitle: ch.chapterTitle,
+                chapterorder: ch.chapterOrder ?? cIdx,
             }])
             .select()
             .single();
@@ -83,22 +81,23 @@ export const addCourse = catchAsync(async (req, res) => {
 
         for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
             const lecFile = files.find(f => f.fieldname === `lectureFile_${cIdx}_${lIdx}`);
-            let url = lec.lectureUrl;
+            let url = lec.lectureUrl ?? null;
             if (lecFile) {
                 const result = await uploadBuffer(lecFile.buffer, { resource_type: 'auto' });
                 url = result.secure_url;
             }
 
             await supabase.from('lectures').insert([{
-                chapter_id: chapter.id,
-                lecture_title: lec.lectureTitle,
-                lecture_duration: lec.lectureDuration,
-                lecture_url: url,
-                is_preview: lec.isPreview,
-                lecture_order: lec.lectureOrder || lIdx,
+                chapterid: chapter.id,
+                lecturetitle: lec.lectureTitle,
+                lectureduration: lec.lectureDuration ?? null,
+                lectureurl: url,
+                ispreviewfree: lec.isPreview ?? false,
+                lectureorder: lec.lectureOrder ?? lIdx,
             }]);
         }
     }
+
     res.status(201).json({ success: true, data: newCourse });
 });
 
@@ -108,61 +107,59 @@ export const updateCourse = catchAsync(async (req, res) => {
         .from('courses')
         .select('*')
         .eq('id', req.params.id)
-        .eq('educator', userId)
+        .eq('educator_id', userId)
         .single();
 
     if (!course) throw new ApiError(404, 'Course not found');
 
     const files = req.files || [];
     const parsed = req.body.courseData ? JSON.parse(req.body.courseData) : {};
-    
+
     const thumb = files.find(f => f.fieldname === 'courseThumbnail' || f.fieldname === 'image');
     if (thumb) {
         const result = await uploadBuffer(thumb.buffer);
-        parsed.course_thumbnail = result.secure_url;
+        parsed.coursethumbnail = result.secure_url;
     }
 
     const { courseContent, ...fields } = parsed;
     const updateFields = {};
-    if (fields.courseTitle) updateFields.course_title = fields.courseTitle;
-    if (fields.courseDescription) updateFields.course_description = fields.courseDescription;
-    if (fields.coursePrice !== undefined) updateFields.course_price = fields.coursePrice;
+    if (fields.courseTitle) updateFields.coursetitle = fields.courseTitle;
+    if (fields.courseDescription) updateFields.coursedescription = fields.courseDescription;
+    if (fields.coursePrice !== undefined) updateFields.courseprice = fields.coursePrice;
     if (fields.discount !== undefined) updateFields.discount = fields.discount;
-    if (parsed.course_thumbnail) updateFields.course_thumbnail = parsed.course_thumbnail;
-    if (fields.isPublished !== undefined) updateFields.is_published = fields.isPublished;
+    if (parsed.coursethumbnail) updateFields.coursethumbnail = parsed.coursethumbnail;
+    if (fields.isPublished !== undefined) updateFields.ispublished = fields.isPublished;
     if (fields.category) updateFields.category = fields.category;
-    if (fields.level) updateFields.level = fields.level;
-    if (fields.language) updateFields.language = fields.language;
 
     await supabase.from('courses').update(updateFields).eq('id', course.id);
 
     if (courseContent) {
-        const { data: chapters } = await supabase.from('chapters').select('id').eq('course_id', course.id);
+        const { data: chapters } = await supabase.from('chapters').select('id').eq('courseid', course.id);
         if (chapters && chapters.length) {
             const chapterIds = chapters.map(c => c.id);
-            await supabase.from('lectures').delete().in('chapter_id', chapterIds);
-            await supabase.from('chapters').delete().eq('course_id', course.id);
+            await supabase.from('lectures').delete().in('chapterid', chapterIds);
+            await supabase.from('chapters').delete().eq('courseid', course.id);
         }
 
         for (const [cIdx, ch] of courseContent.entries()) {
             const { data: chapter } = await supabase
                 .from('chapters')
                 .insert([{
-                    course_id: course.id,
-                    chapter_title: ch.chapterTitle,
-                    chapter_order: ch.chapterOrder || cIdx,
+                    courseid: course.id,
+                    chaptertitle: ch.chapterTitle,
+                    chapterorder: ch.chapterOrder ?? cIdx,
                 }])
                 .select()
                 .single();
 
             for (const [lIdx, lec] of (ch.chapterContent || []).entries()) {
                 await supabase.from('lectures').insert([{
-                    chapter_id: chapter.id,
-                    lecture_title: lec.lectureTitle,
-                    lecture_duration: lec.lectureDuration,
-                    lecture_url: lec.lectureUrl,
-                    is_preview: lec.isPreview,
-                    lecture_order: lec.lectureOrder || lIdx,
+                    chapterid: chapter.id,
+                    lecturetitle: lec.lectureTitle,
+                    lectureduration: lec.lectureDuration ?? null,
+                    lectureurl: lec.lectureUrl ?? null,
+                    ispreviewfree: lec.isPreview ?? false,
+                    lectureorder: lec.lectureOrder ?? lIdx,
                 }]);
             }
         }
@@ -177,20 +174,19 @@ export const deleteCourse = catchAsync(async (req, res) => {
         .from('courses')
         .select('id')
         .eq('id', req.params.id)
-        .eq('educator', userId)
+        .eq('educator_id', userId)
         .single();
 
     if (!course) throw new ApiError(404, 'Course not found');
 
-    // Supabase usually handles cascaded deletes if configured, but let's be explicit if not.
-    const { data: chapters } = await supabase.from('chapters').select('id').eq('course_id', course.id);
+    const { data: chapters } = await supabase.from('chapters').select('id').eq('courseid', course.id);
     if (chapters && chapters.length) {
         const chapterIds = chapters.map(c => c.id);
-        await supabase.from('lectures').delete().in('chapter_id', chapterIds);
-        await supabase.from('chapters').delete().eq('course_id', course.id);
+        await supabase.from('lectures').delete().in('chapterid', chapterIds);
+        await supabase.from('chapters').delete().eq('courseid', course.id);
     }
     await supabase.from('courses').delete().eq('id', course.id);
-    
+
     res.json({ success: true, message: 'Course deleted successfully' });
 });
 
@@ -198,7 +194,7 @@ export const getEducatorCourses = catchAsync(async (req, res) => {
     const { data: courses, error } = await supabase
         .from('courses')
         .select('*')
-        .eq('educator', req.auth.userId)
+        .eq('educator_id', req.auth.userId)
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -207,55 +203,64 @@ export const getEducatorCourses = catchAsync(async (req, res) => {
 
 export const educatorDashboardData = catchAsync(async (req, res) => {
     const educatorId = req.auth.userId;
-    const { data: courses } = await supabase.from('courses').select('id').eq('educator', educatorId);
-    
+    const { data: courses } = await supabase.from('courses').select('id').eq('educator_id', educatorId);
+
     if (!courses || !courses.length) {
-        return res.json({ success: true, dashboardData: { totalEarnings: 0, enrolledStudentsData: [], totalCourses: 0, totalStudents: 0, totalFollowers: 0 } });
+        return res.json({
+            success: true,
+            dashboardData: { totalEarnings: 0, enrolledStudentsData: [], totalCourses: 0, totalStudents: 0, totalFollowers: 0 },
+        });
     }
 
     const ids = courses.map(c => c.id);
 
     const { data: purchases } = await supabase
         .from('purchases')
-        .select('*')
-        .in('course_id', ids)
+        .select('educatoramount')
+        .in('courseid', ids)
         .eq('status', 'completed');
 
     const { data: studentDetails } = await supabase
         .from('purchases')
         .select(`
-            course_id,
-            courses (course_title),
-            users (id, name, image_url)
+            courseid,
+            courses (coursetitle),
+            users (id, name, imageUrl)
         `)
-        .in('course_id', ids)
+        .in('courseid', ids)
         .eq('status', 'completed')
         .order('created_at', { ascending: false })
         .limit(10);
 
-    const { data: profile } = await supabase.from('educators').select('followers_count').eq('user_id', educatorId).single();
+    const { data: profile } = await supabase
+        .from('educators')
+        .select('id')
+        .eq('userid', educatorId)
+        .maybeSingle();
 
-    const totalEarnings = parseFloat((purchases || []).reduce((s, p) => s + parseFloat(p.educator_amount || 0), 0).toFixed(2));
-    
-    res.json({ 
-        success: true, 
-        dashboardData: { 
-            totalEarnings, 
-            enrolledStudentsData: (studentDetails || []).map(p => ({ 
-                courseTitle: p.courses?.course_title, 
-                student: p.users 
-            })), 
-            totalCourses: courses.length, 
-            totalStudents: (purchases || []).length, 
-            totalFollowers: profile?.followers_count || 0 
-        } 
+    const totalEarnings = parseFloat(
+        (purchases || []).reduce((s, p) => s + parseFloat(p.educatoramount ?? 0), 0).toFixed(2)
+    );
+
+    res.json({
+        success: true,
+        dashboardData: {
+            totalEarnings,
+            enrolledStudentsData: (studentDetails || []).map(p => ({
+                courseTitle: p.courses?.coursetitle ?? 'N/A',
+                student: p.users,
+            })),
+            totalCourses: courses.length,
+            totalStudents: (purchases || []).length,
+            totalFollowers: 0,
+        },
     });
 });
 
 export const getEnrolledStudentsData = catchAsync(async (req, res) => {
     const educatorId = req.auth.userId;
-    const { data: courses } = await supabase.from('courses').select('id').eq('educator', educatorId);
-    
+    const { data: courses } = await supabase.from('courses').select('id').eq('educator_id', educatorId);
+
     if (!courses || !courses.length) {
         return res.json({ success: true, enrolledStudents: [] });
     }
@@ -264,64 +269,61 @@ export const getEnrolledStudentsData = catchAsync(async (req, res) => {
         .from('purchases')
         .select(`
             created_at,
-            courses (course_title),
-            users (id, name, image_url)
+            courses (coursetitle),
+            users (id, name, imageUrl)
         `)
-        .in('course_id', courses.map(c => c.id))
+        .in('courseid', courses.map(c => c.id))
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 
-    res.json({ 
-        success: true, 
-        enrolledStudents: (purchases || []).map(p => ({ 
-            student: p.users, 
-            courseTitle: p.courses?.course_title || 'N/A', 
-            purchaseDate: p.created_at 
-        })) 
+    res.json({
+        success: true,
+        enrolledStudents: (purchases || []).map(p => ({
+            student: p.users,
+            courseTitle: p.courses?.coursetitle ?? 'N/A',
+            purchaseDate: p.created_at,
+        })),
     });
 });
 
 export const getPublicEducatorProfile = catchAsync(async (req, res) => {
     const id = req.params.id;
-    
+
     const { data: user } = await supabase
         .from('users')
-        .select('id, name, image_url')
+        .select('id, name, imageUrl')
         .eq('id', id)
         .single();
 
-    if (!user) throw new ApiError(404, "Educator not found");
+    if (!user) throw new ApiError(404, 'Educator not found');
 
     const { data: profile } = await supabase
         .from('educators')
-        .select('bio, specialty, experience, qualification, subjects')
-        .eq('user_id', id)
-        .single();
+        .select('bio, experience, qualification, status')
+        .eq('userid', id)
+        .maybeSingle();
 
     const { data: courses } = await supabase
         .from('courses')
         .select(`
-            id, course_title, course_price, discount, course_thumbnail, category,
-            educatorDetails:users (id, name, image_url)
+            id, coursetitle, courseprice, discount, coursethumbnail, category,
+            educatorDetails:users (id, name, imageUrl)
         `)
-        .eq('educator', id)
-        .eq('is_published', true)
+        .eq('educator_id', id)
+        .eq('ispublished', true)
         .order('created_at', { ascending: false });
 
-    res.json({ 
-        success: true, 
-        data: { 
-            id: user.id, 
-            name: user.name, 
-            imageUrl: user.image_url, 
-            bio: profile?.bio || 'Experienced educator.', 
-            specialty: profile?.specialty || 'General Studies', 
-            experience: profile?.experience || 0, 
-            qualification: profile?.qualification || '', 
-            subjects: profile?.subjects || [], 
-            courses: courses || [], 
-            user, 
-            educator: profile || {} 
-        } 
+    res.json({
+        success: true,
+        data: {
+            id: user.id,
+            name: user.name,
+            imageUrl: user.imageUrl ?? null,
+            bio: profile?.bio ?? 'Experienced educator.',
+            experience: profile?.experience ?? 0,
+            qualification: profile?.qualification ?? '',
+            courses: courses ?? [],
+            educator: profile ?? {},
+        },
     });
 });

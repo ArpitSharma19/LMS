@@ -23,7 +23,7 @@ export const register = catchAsync(async (req, res) => {
     .from('users')
     .select('id')
     .eq('email', email)
-    .single();
+    .maybeSingle();
 
   if (existing) throw new ApiError(409, 'Email already registered');
 
@@ -36,7 +36,7 @@ export const register = catchAsync(async (req, res) => {
       email,
       password: hashed,
       role: role === 'educator' ? 'student' : role,
-      is_verified: false,
+      isverified: false,
     }])
     .select()
     .single();
@@ -46,8 +46,8 @@ export const register = catchAsync(async (req, res) => {
   if (role === 'educator') {
     const { error: educatorError } = await supabase
       .from('educators')
-      .insert([{ user_id: newUser.id, status: 'pending' }]);
-    
+      .insert([{ userid: newUser.id, status: 'pending' }]);
+
     if (educatorError) throw educatorError;
   }
 
@@ -64,7 +64,7 @@ export const login = catchAsync(async (req, res) => {
     .from('admins')
     .select('*')
     .eq('email', String(email))
-    .single();
+    .maybeSingle();
 
   if (admin && await bcrypt.compare(password, admin.password)) {
     const token = jwt.sign({ id: admin.id, email: admin.email, role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '1d' });
@@ -76,7 +76,7 @@ export const login = catchAsync(async (req, res) => {
     .from('users')
     .select('*')
     .eq('email', String(email))
-    .single();
+    .maybeSingle();
 
   // user.password can be null for manually-inserted rows — guard before bcrypt
   if (!user || !user.password || !(await bcrypt.compare(password, user.password))) {
@@ -89,8 +89,8 @@ export const login = catchAsync(async (req, res) => {
   const { data: profile } = await supabase
     .from('educators')
     .select('status')
-    .eq('user_id', user.id)
-    .single();
+    .eq('userid', user.id)
+    .maybeSingle();
 
   if (profile) {
     educatorStatus = profile.status;
@@ -109,13 +109,13 @@ export const login = catchAsync(async (req, res) => {
     token: signToken(user),
     role: user.role,
     educatorStatus,
-    user: { 
-      id: user.id, 
-      name: user.name, 
-      email: user.email, 
-      role: user.role, 
-      imageUrl: user.image_url, 
-      isVerified: user.is_verified 
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      imageUrl: user.imageUrl ?? null,
+      isVerified: user.isverified ?? false,
     },
     message: 'Login successful',
   });
@@ -131,15 +131,15 @@ export const forgotPassword = catchAsync(async (req, res) => {
     .from('users')
     .select('id, name')
     .eq('email', String(email))
-    .single();
+    .maybeSingle();
 
   if (user) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    
+
     await supabase
       .from('users')
-      .update({ otp, otp_expiry: otpExpiry })
+      .update({ otp, otpexpiry: otpExpiry })
       .eq('id', user.id);
 
     sendEmail(email, 'Password Reset OTP', getOtpEmailTemplate(user.name, otp)).catch(() => {});
@@ -151,12 +151,12 @@ export const verifyOtp = catchAsync(async (req, res) => {
   const { email, otp } = req.body;
   const { data: user } = await supabase
     .from('users')
-    .select('otp, otp_expiry')
+    .select('otpexpiry')
     .eq('email', String(email))
     .eq('otp', String(otp))
-    .single();
+    .maybeSingle();
 
-  if (!user || !user.otp_expiry || new Date(user.otp_expiry) < new Date()) {
+  if (!user || !user.otpexpiry || new Date(user.otpexpiry) < new Date()) {
     throw new ApiError(400, 'Invalid or expired OTP');
   }
   res.json({ success: true, message: 'OTP verified successfully. You can now reset your password.' });
@@ -168,22 +168,22 @@ export const resetPassword = catchAsync(async (req, res) => {
 
   const { data: user } = await supabase
     .from('users')
-    .select('id, otp_expiry')
+    .select('id, otpexpiry')
     .eq('email', String(email))
     .eq('otp', String(otp))
-    .single();
+    .maybeSingle();
 
-  if (!user || !user.otp_expiry || new Date(user.otp_expiry) < new Date()) {
+  if (!user || !user.otpexpiry || new Date(user.otpexpiry) < new Date()) {
     throw new ApiError(400, 'Session expired. Please request a new OTP.');
   }
 
   const hashed = await bcrypt.hash(password, 10);
   await supabase
     .from('users')
-    .update({ 
-      password: hashed, 
-      otp: null, 
-      otp_expiry: null 
+    .update({
+      password: hashed,
+      otp: null,
+      otpexpiry: null,
     })
     .eq('id', user.id);
 
@@ -216,7 +216,7 @@ export const changePassword = catchAsync(async (req, res) => {
 });
 
 export const applyAsEducator = catchAsync(async (req, res) => {
-  const { qualification, experience, subjects, bio, portfolioLinks } = req.body;
+  const { qualification, experience, bio } = req.body;
   const { data: user } = await supabase
     .from('users')
     .select('id, name, email')
@@ -228,28 +228,26 @@ export const applyAsEducator = catchAsync(async (req, res) => {
   const { data: profile } = await supabase
     .from('educators')
     .select('status')
-    .eq('user_id', user.id)
-    .single();
+    .eq('userid', user.id)
+    .maybeSingle();
 
   if (!profile) {
     await supabase
       .from('educators')
       .insert([{
-        user_id: user.id,
+        userid: user.id,
         qualification,
         experience,
-        subjects,
         bio,
-        portfolio_links: portfolioLinks,
-        status: 'pending'
+        status: 'pending',
       }]);
   } else {
     if (profile.status === 'active') throw new ApiError(400, 'Your educator account is already active.');
     if (profile.status === 'pending') {
       await supabase
         .from('educators')
-        .update({ qualification, experience, subjects, bio, portfolio_links: portfolioLinks })
-        .eq('user_id', user.id);
+        .update({ qualification, experience, bio })
+        .eq('userid', user.id);
     }
   }
 
@@ -260,7 +258,7 @@ export const applyAsEducator = catchAsync(async (req, res) => {
 export const getMe = catchAsync(async (req, res) => {
   const { data: user } = await supabase
     .from('users')
-    .select('id, name, email, role, image_url, is_verified, created_at')
+    .select('id, name, email, role, imageUrl, isverified, created_at')
     .eq('id', req.auth.userId)
     .single();
 
@@ -272,8 +270,8 @@ export const getEducatorStatus = catchAsync(async (req, res) => {
   const { data: profile } = await supabase
     .from('educators')
     .select('status')
-    .eq('user_id', req.auth.userId)
-    .single();
+    .eq('userid', req.auth.userId)
+    .maybeSingle();
 
   res.json({ success: true, status: profile?.status || null });
 });
